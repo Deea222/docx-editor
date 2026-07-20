@@ -1,5 +1,7 @@
 # @docx-editor.dev/agents
 
+## 0.0.2
+
 ## 1.10.0
 
 ## 1.9.0
