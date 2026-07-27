@@ -130,46 +130,50 @@ export function isCellInSelection(
   );
 }
 
+function emptyCellContent(): TableCell['content'] {
+  return [{ type: 'paragraph' as const, content: [], formatting: {} }];
+}
+
 /**
- * Create an empty row with the same structure as an existing row
+ * Create an empty row matching `templateRow`. Where `belowRow` continues a
+ * vertical merge, the new row repeats that `vMerge: 'continue'` cell so
+ * inserting inside a merge extends it rather than severing it.
  */
-export function createEmptyRow(templateRow: TableRow, columnCount: number): TableRow {
+export function createEmptyRow(
+  templateRow: TableRow,
+  columnCount: number,
+  belowRow?: TableRow
+): TableRow {
   const cells: TableCell[] = [];
 
-  // Create cells matching the column structure
+  const continuesMergeAt = (colIndex: number): boolean =>
+    belowRow ? getRowCellStartingAt(belowRow, colIndex)?.formatting?.vMerge === 'continue' : false;
+
   let colIndex = 0;
   for (const templateCell of templateRow.cells) {
     const colspan = templateCell.formatting?.gridSpan ?? 1;
-    cells.push({
-      type: 'tableCell',
-      content: [
-        {
-          type: 'paragraph' as const,
-          content: [],
-          formatting: {},
-        },
-      ],
-      formatting: {
-        ...templateCell.formatting,
-        vMerge: undefined, // Don't copy vertical merge
-      },
-    });
+    cells.push(
+      continuesMergeAt(colIndex)
+        ? {
+            type: 'tableCell',
+            content: [],
+            formatting: { ...templateCell.formatting, vMerge: 'continue' },
+          }
+        : {
+            type: 'tableCell',
+            content: emptyCellContent(),
+            formatting: { ...templateCell.formatting, vMerge: undefined },
+          }
+    );
     colIndex += colspan;
   }
 
-  // If template row has fewer columns, add more cells
   while (colIndex < columnCount) {
-    cells.push({
-      type: 'tableCell',
-      content: [
-        {
-          type: 'paragraph' as const,
-          content: [],
-          formatting: {},
-        },
-      ],
-      formatting: {},
-    });
+    cells.push(
+      continuesMergeAt(colIndex)
+        ? { type: 'tableCell', content: [], formatting: { vMerge: 'continue' } }
+        : { type: 'tableCell', content: emptyCellContent(), formatting: {} }
+    );
     colIndex++;
   }
 
@@ -403,7 +407,8 @@ export function addRow(
   const insertIndex = position === 'before' ? atIndex : atIndex + 1;
   const templateRow = table.rows[atIndex] || table.rows[0];
   const columnCount = getColumnCount(table);
-  const newRow = createEmptyRow(templateRow, columnCount);
+  const belowRow = table.rows[insertIndex];
+  const newRow = createEmptyRow(templateRow, columnCount, belowRow);
 
   newRows.splice(insertIndex, 0, newRow);
 
